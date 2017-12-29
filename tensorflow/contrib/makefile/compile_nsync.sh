@@ -17,11 +17,12 @@
 
 # Compile the nsync library for the platforms given as arguments.
 
-set -e
+set -ex
 
 prog=compile_nsync.sh
 android_api_version=21
 default_android_arch=armeabi-v7a
+default_cross_arch=armv7-a
 default_ios_arch="i386 x86_64 armv7 armv7s arm64"
 
 usage="usage: $prog [-t linux|ios|android|macos|native]
@@ -91,6 +92,11 @@ ios)            case "$target_arch" in
                 ;;
 android)        case "$target_arch" in
                 default) archs="$default_android_arch";;
+                *)       archs="$target_arch";;
+                esac
+                ;;
+cross)        case "$target_arch" in
+                default) archs="$default_cross_arch";;
                 *)       archs="$target_arch";;
                 esac
                 ;;
@@ -280,7 +286,30 @@ for arch in $archs; do
                         include ../../platform/posix/make.common
                         include dependfile
                 ';;
-
+        cross)
+                makefile='
+                        CC=${TARGET_NSYNC_CC}
+                        PLATFORM_CPPFLAGS=-DNSYNC_ATOMIC_CPP11 \
+                          -DNSYNC_USE_CPP11_TIMEPOINT \
+                          -I../../platform/c++11 -I../../platform/gcc \
+                          -I../../platform/posix -pthread --std=c++11 \
+                          --sysroot ${TARGET_SYSROOT}
+                        PLATFORM_CFLAGS=-Wno-narrowing '"$march_option"' -fPIE -fPIC \
+                          --sysroot ${TARGET_SYSROOT} --std=c++11
+                        PLATFORM_LDFLAGS=-pthread
+                        MKDEP=${TARGET_NSYNC_CC} -M
+                        PLATFORM_C=../../platform/c++11/src/nsync_semaphore_mutex.cc \
+                                   ../../platform/c++11/src/per_thread_waiter.cc \
+                                   ../../platform/c++11/src/yield.cc \
+                                   ../../platform/c++11/src/time_rep_timespec.cc \
+                                   ../../platform/c++11/src/nsync_panic.cc
+                        PLATFORM_OBJS=nsync_semaphore_mutex.o per_thread_waiter.o yield.o \
+                                      time_rep_timespec.o nsync_panic.o
+                        TEST_PLATFORM_C=../../platform/c++11/src/start_thread.cc
+                        TEST_PLATFORM_OBJS=start_thread.o
+                        include ../../platform/posix/make.common
+                        include dependfile
+                ';;
                 *)      echo "$usage" >&2; exit 2;;
         esac
 
